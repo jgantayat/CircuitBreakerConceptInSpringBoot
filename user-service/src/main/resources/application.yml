@@ -1,35 +1,33 @@
 server:
     port: 8090
 management:
+    endpoint:
+        health:
+            show-details: always
+            show-components: always
     health:
         circuitbreakers:
             enabled: true
     endpoints:
         web:
             exposure:
-                include: health
-    endpoint:
-        health:
-            show-details: always
-
+                include: health,metrics
 
 resilience4j:
     circuitbreaker:
         instances:
             UserService:
                 registerHealthIndicator: true
-                eventConsumerBufferSize: 10
+                minimumNumberOfCalls: 1
                 failureRateThreshold: 50
-                minimumNumberOfCalls: 5
-                automaticTransitionFromOpenToHalfOpenEnabled: true
+                slowCallDurationThreshold: 2s
+                slowCallRateThreshold: 50
                 waitDurationInOpenState: 5s
-                permittedNumberOfCallsInHalfOpenState: 3
-                slidingWindowSize: 10
-                slidingWindowType: COUNT_BASED
-
-
     retry:
         instances:
-            userService:
+            UserService:
                 maxRetryAttempts: 5
                 waitDuration: 10s
+logging:
+    level:
+        io.github.resilience4j.circuitbreaker: DEBUG
