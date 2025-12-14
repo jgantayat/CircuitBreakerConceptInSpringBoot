@@ -42,24 +42,164 @@ This project showcases how to:
 
 ## 🏗️ Architecture Overview
 
-### 📐 Logical Flow
+### 📐 High-Level Architecture (Image-ready / Draw.io)
 
 ```text
-┌────────────┐       REST Call        ┌────────────┐
-│  Service A │ ───────────────────▶ │  Service B │
-│ (Consumer) │                       │ (Provider) │
-└─────┬──────┘                       └─────┬──────┘
-      │   Circuit Breaker (Resilience4j)   │
-      │──────────────────────────────────▶│
-      │                                    │
-      │◀──────── Fallback Response ───────│
+                ┌────────────────────┐
+                │   API Gateway /     │
+                │   Client App        │
+                └─────────┬──────────┘
+                          │
+                          ▼
+┌────────────────────┐  REST Call  ┌────────────────────┐
+│    Service A       │────────────▶│     Service B      │
+│ (Order / User)    │              │ (Downstream API)  │
+│                  │◀────Fallback──│                    │
+│  Resilience4j     │              │                    │
+│  Circuit Breaker  │              │                    │
+└────────────────────┘              └────────────────────┘
 ```
 
-### 🧩 Behavior
+🖼️ This diagram can be directly recreated in **Draw.io / Lucidchart** using simple rectangles and directional arrows.
 
-🟢 **Closed** → Calls flow normally
-🟡 **Open** → Calls blocked, fallback triggered
-🔵 **Half-Open** → Limited test calls to check recovery
+---
+
+## 🐳 Docker & Docker Compose Setup
+
+### 📦 Dockerfile (Spring Boot Service)
+
+```dockerfile
+FROM eclipse-temurin:17-jdk-alpine
+WORKDIR /app
+COPY target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-jar","app.jar"]
+```
+
+### 🧩 docker-compose.yml
+
+```yaml
+version: '3.8'
+services:
+  service-a:
+    build: ./service-a
+    ports:
+      - "8081:8080"
+    depends_on:
+      - service-b
+
+  service-b:
+    build: ./service-b
+    ports:
+      - "8082:8080"
+```
+
+🐳 Enables **local multi-service testing** with failure simulation.
+
+---
+
+## ☸️ Kubernetes + Istio Circuit Breaker
+
+### 📦 Kubernetes Deployment (Sample)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-a
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: service-a
+  template:
+    metadata:
+      labels:
+        app: service-a
+    spec:
+      containers:
+        - name: service-a
+          image: service-a:latest
+          ports:
+            - containerPort: 8080
+```
+
+### 🔌 Istio DestinationRule (Circuit Breaking)
+
+```yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: service-b-circuit-breaker
+spec:
+  host: service-b
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 1
+        maxRequestsPerConnection: 1
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 5s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+```
+
+☸️ Demonstrates **infrastructure-level resilience** using Istio.
+
+---
+
+## 📊 Grafana Dashboard (Resilience4j Metrics)
+
+```json
+{
+  "title": "Resilience4j Circuit Breaker",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Circuit Breaker State",
+      "targets": [
+        {
+          "expr": "resilience4j_circuitbreaker_state"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Failed Calls",
+      "targets": [
+        {
+          "expr": "resilience4j_circuitbreaker_calls_total{outcome=\"failed\"}"
+        }
+      ]
+    }
+  ]
+}
+```
+
+📈 Import this JSON directly into **Grafana**.
+
+---
+
+## 🧪 JUnit Test Snippets (Circuit Breaker)
+
+```java
+@SpringBootTest
+class CircuitBreakerTest {
+
+    @Autowired
+    private UserService userService;
+
+    @Test
+    void shouldTriggerFallbackWhenServiceFails() {
+        String response = userService.getUserOrders("electronics");
+        assertNotNull(response);
+        assertTrue(response.contains("Fallback"));
+    }
+}
+```
+
+🧪 Validates **fallback execution & resilience behavior**.
 
 ---
 
