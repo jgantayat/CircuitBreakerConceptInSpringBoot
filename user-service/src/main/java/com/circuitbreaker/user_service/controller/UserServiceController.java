@@ -22,7 +22,6 @@ import java.util.stream.Stream;
 @RestController
 @RequestMapping("/user-service")
 public class UserServiceController {
-
     @Autowired
     @Lazy
     private RestTemplate restTemplate;
@@ -30,6 +29,17 @@ public class UserServiceController {
     public static final String USER_SERVICE = "UserService";
     private static final String BASEURL = "http://localhost:8070/orders";
 
+    /**
+     * This method is a rest controller method for the getMapping for displaying the orders
+     * Where we have the circuit-breaker implementation for the non-transient error/exception
+     * from the restCall to BASEURL from the catalog-service endpoint response.
+     *
+     * The fallBack method getAllAvailableProducts is there for the rest endpoint call failure
+     * from the catalog-service
+     *
+     * @param category is the category of the orders
+     * @return will return the list of Order items
+     */
     @GetMapping("/displayOrders")
     @CircuitBreaker(name = USER_SERVICE, fallbackMethod = "getAllAvailableProducts")
     public List<OrderDTO> displayOrders(
@@ -48,7 +58,12 @@ public class UserServiceController {
         return response.getBody();
     }
 
-    // ✅ Correct fallback method
+    /**
+     * ✅ Correct fallback method
+     * @param category
+     * @param e
+     * @return
+     */
     public List<OrderDTO> getAllAvailableProducts(String category, Exception e) {
         System.out.println("Fallback executed due to: " + e.getMessage());
 
